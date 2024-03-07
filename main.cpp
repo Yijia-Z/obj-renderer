@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <map>
 
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
@@ -15,7 +16,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-void processInput(GLFWwindow *window);
+void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle);
 std::string readFile(const std::string &filename);
 void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &colors, std::vector<unsigned int> &indices);
 
@@ -103,7 +104,7 @@ int main()
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> colors;
     std::vector<unsigned int> indices;
-    loadOBJ("./data/cube.obj", vertices, colors, indices);
+    loadOBJ("./data/venus.obj", vertices, colors, indices);
 
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -135,19 +136,21 @@ int main()
     // render loop
     // -----------
     glm::vec3 modelPos(0.0f, 0.0f, -10.0f);
+    float rotationAngle = 0.0f;
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
-    projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+    projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 1000.0f);
 
     while (!glfwWindowShouldClose(window))
     {
-        processInput(window);
+        processInput(window, modelPos, rotationAngle);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         model = glm::translate(glm::mat4(1.0f), modelPos);
+        model = glm::rotate(model, rotationAngle, glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 mvp = projection * view * model;
         unsigned int mvpLoc = glGetUniformLocation(shaderProgram, "mvp");
         glUseProgram(shaderProgram);
@@ -169,10 +172,24 @@ int main()
     return 0;
 }
 
-void processInput(GLFWwindow *window)
+void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    const float cameraSpeed = 0.05f;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        modelPos.z += cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        modelPos.z -= cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        modelPos.x -= cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        modelPos.x += cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+        rotationAngle += cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+        rotationAngle -= cameraSpeed;
 }
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
@@ -195,6 +212,13 @@ std::string readFile(const std::string &filename)
 
     return buffer.str();
 }
+struct Material
+{
+    glm::vec3 ambient;
+    glm::vec3 diffuse;
+    glm::vec3 specular;
+    float shininess;
+};
 
 void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &colors, std::vector<unsigned int> &indices)
 {
@@ -207,8 +231,12 @@ void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std:
 
     std::vector<glm::vec3> temp_vertices;
     std::vector<glm::vec3> temp_colors;
+    std::vector<glm::vec3> temp_normals;
 
     std::string line;
+    std::string material_file;
+    glm::vec3 current_color(1.0f, 0.5f, 0.2f); // default color
+
     while (std::getline(file, line))
     {
         std::istringstream iss(line);
@@ -220,25 +248,51 @@ void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std:
             float x, y, z;
             iss >> x >> y >> z;
             temp_vertices.emplace_back(x, y, z);
-            temp_colors.emplace_back(1.0f, 0.5f, 0.2f); // default color
+            temp_colors.emplace_back(current_color);
+        }
+        else if (prefix == "vn")
+        {
+            float x, y, z;
+            iss >> x >> y >> z;
+            temp_normals.emplace_back(x, y, z);
+        }
+        else if (prefix == "mtllib")
+        {
+            iss >> material_file;
+            // Load material file (not implemented in this example)
+        }
+        else if (prefix == "usemtl")
+        {
+            std::string material_name;
+            iss >> material_name;
+            // Set the current_color based on the material (not implemented in this example)
         }
         else if (prefix == "f")
         {
             std::vector<unsigned int> face_vertices;
-            unsigned int vertex_index;
-            while (iss >> vertex_index)
+            std::vector<unsigned int> face_normals;
+            std::string vertex_data;
+            while (iss >> vertex_data)
             {
-                face_vertices.push_back(vertex_index - 1);
-                if (iss.peek() == '/')
+                size_t delimiter_pos = vertex_data.find('/');
+                if (delimiter_pos == std::string::npos)
                 {
-                    iss.ignore(1, '/');
-                    unsigned int normal_index;
-                    iss >> normal_index;
-                    if (iss.peek() == '/')
+                    // Vertex only
+                    face_vertices.push_back(std::stoul(vertex_data) - 1);
+                }
+                else
+                {
+                    // Vertex and normal (or texture coordinate)
+                    face_vertices.push_back(std::stoul(vertex_data.substr(0, delimiter_pos)) - 1);
+                    if (vertex_data.find('/', delimiter_pos + 1) != std::string::npos)
                     {
-                        iss.ignore(1, '/');
-                        unsigned int texture_index;
-                        iss >> texture_index;
+                        // Vertex, texture coordinate, and normal
+                        face_normals.push_back(std::stoul(vertex_data.substr(vertex_data.rfind('/') + 1)) - 1);
+                    }
+                    else
+                    {
+                        // Vertex and normal
+                        face_normals.push_back(std::stoul(vertex_data.substr(delimiter_pos + 1)) - 1);
                     }
                 }
             }
