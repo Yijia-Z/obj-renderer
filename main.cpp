@@ -16,7 +16,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle);
+void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle, float &scale);
 std::string readFile(const std::string &filename);
 void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &colors, std::vector<unsigned int> &indices);
 
@@ -104,7 +104,7 @@ int main()
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> colors;
     std::vector<unsigned int> indices;
-    loadOBJ("./data/venus.obj", vertices, colors, indices);
+    loadOBJ("./data/pig.obj", vertices, colors, indices);
 
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -137,6 +137,7 @@ int main()
     // -----------
     glm::vec3 modelPos(0.0f, 0.0f, -10.0f);
     float rotationAngle = 0.0f;
+    float scale = 1.0f;
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
@@ -144,13 +145,14 @@ int main()
 
     while (!glfwWindowShouldClose(window))
     {
-        processInput(window, modelPos, rotationAngle);
+        processInput(window, modelPos, rotationAngle, scale);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         model = glm::translate(glm::mat4(1.0f), modelPos);
         model = glm::rotate(model, rotationAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::scale(model, glm::vec3(scale, scale, scale));
         glm::mat4 mvp = projection * view * model;
         unsigned int mvpLoc = glGetUniformLocation(shaderProgram, "mvp");
         glUseProgram(shaderProgram);
@@ -172,7 +174,7 @@ int main()
     return 0;
 }
 
-void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle)
+void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle, float &scale)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -186,10 +188,20 @@ void processInput(GLFWwindow *window, glm::vec3 &modelPos, float &rotationAngle)
         modelPos.x -= cameraSpeed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         modelPos.x += cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS)
+        modelPos.y -= cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
+        modelPos.y += cameraSpeed;
+
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-        rotationAngle += cameraSpeed;
+        rotationAngle += 0.1 * cameraSpeed;
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-        rotationAngle -= cameraSpeed;
+        rotationAngle -= 0.1 * cameraSpeed;
+    // scaling
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+        scale *= (1 + 0.1 * cameraSpeed);
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+        scale *= (1 - 0.1 * cameraSpeed);
 }
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
@@ -212,6 +224,7 @@ std::string readFile(const std::string &filename)
 
     return buffer.str();
 }
+
 struct Material
 {
     glm::vec3 ambient;
@@ -219,6 +232,8 @@ struct Material
     glm::vec3 specular;
     float shininess;
 };
+
+std::map<std::string, Material> materials;
 
 void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &colors, std::vector<unsigned int> &indices)
 {
@@ -231,11 +246,13 @@ void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std:
 
     std::vector<glm::vec3> temp_vertices;
     std::vector<glm::vec3> temp_colors;
-    std::vector<glm::vec3> temp_normals;
 
     std::string line;
     std::string material_file;
     glm::vec3 current_color(1.0f, 0.5f, 0.2f); // default color
+
+    std::ifstream mtl_file;
+    Material current_material;
 
     while (std::getline(file, line))
     {
@@ -250,27 +267,86 @@ void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std:
             temp_vertices.emplace_back(x, y, z);
             temp_colors.emplace_back(current_color);
         }
-        else if (prefix == "vn")
-        {
-            float x, y, z;
-            iss >> x >> y >> z;
-            temp_normals.emplace_back(x, y, z);
-        }
         else if (prefix == "mtllib")
         {
-            iss >> material_file;
-            // Load material file (not implemented in this example)
+            std::string mtl_filename;
+            iss >> mtl_filename;
+            mtl_file.open("./data/" + mtl_filename);
+            if (!mtl_file.is_open())
+            {
+                std::cerr << "Failed to open material file: " << mtl_filename << std::endl;
+                continue;
+            }
+
+            std::string mtl_line;
+            Material temp_material;
+            std::string current_mtl_name;
+
+            while (std::getline(mtl_file, mtl_line))
+            {
+                std::istringstream mtl_iss(mtl_line);
+                std::string mtl_prefix;
+                mtl_iss >> mtl_prefix;
+
+                if (mtl_prefix == "newmtl")
+                {
+                    if (!current_mtl_name.empty())
+                    {
+                        materials[current_mtl_name] = temp_material;
+                    }
+                    mtl_iss >> current_mtl_name;
+                    temp_material = Material();
+                }
+                else if (mtl_prefix == "Ka")
+                {
+                    float r, g, b;
+                    mtl_iss >> r >> g >> b;
+                    temp_material.ambient = glm::vec3(r, g, b);
+                }
+                else if (mtl_prefix == "Kd")
+                {
+                    float r, g, b;
+                    mtl_iss >> r >> g >> b;
+                    temp_material.diffuse = glm::vec3(r, g, b);
+                }
+                else if (mtl_prefix == "Ks")
+                {
+                    float r, g, b;
+                    mtl_iss >> r >> g >> b;
+                    temp_material.specular = glm::vec3(r, g, b);
+                }
+                else if (mtl_prefix == "Ns")
+                {
+                    float shininess;
+                    mtl_iss >> shininess;
+                    temp_material.shininess = shininess;
+                }
+            }
+
+            if (!current_mtl_name.empty())
+            {
+                materials[current_mtl_name] = temp_material;
+            }
+
+            mtl_file.close();
         }
         else if (prefix == "usemtl")
         {
             std::string material_name;
             iss >> material_name;
-            // Set the current_color based on the material (not implemented in this example)
+            if (materials.count(material_name))
+            {
+                current_material = materials[material_name];
+                current_color = current_material.diffuse;
+            }
+            else
+            {
+                std::cerr << "Warning: Material '" << material_name << "' not found" << std::endl;
+            }
         }
         else if (prefix == "f")
         {
             std::vector<unsigned int> face_vertices;
-            std::vector<unsigned int> face_normals;
             std::string vertex_data;
             while (iss >> vertex_data)
             {
@@ -282,18 +358,8 @@ void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std:
                 }
                 else
                 {
-                    // Vertex and normal (or texture coordinate)
+                    // Vertex and texture coordinate (or normal)
                     face_vertices.push_back(std::stoul(vertex_data.substr(0, delimiter_pos)) - 1);
-                    if (vertex_data.find('/', delimiter_pos + 1) != std::string::npos)
-                    {
-                        // Vertex, texture coordinate, and normal
-                        face_normals.push_back(std::stoul(vertex_data.substr(vertex_data.rfind('/') + 1)) - 1);
-                    }
-                    else
-                    {
-                        // Vertex and normal
-                        face_normals.push_back(std::stoul(vertex_data.substr(delimiter_pos + 1)) - 1);
-                    }
                 }
             }
 
@@ -303,6 +369,11 @@ void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std:
                 indices.push_back(face_vertices[0]);
                 indices.push_back(face_vertices[i - 1]);
                 indices.push_back(face_vertices[i]);
+
+                // Assign the current color to the vertices of the face
+                colors.push_back(current_color);
+                colors.push_back(current_color);
+                colors.push_back(current_color);
             }
         }
     }
