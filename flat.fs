@@ -4,7 +4,6 @@ out vec4 FragColor;
 in vec3 FragPos;
 in vec3 Normal;
 in vec3 LightPos;
-in vec3 ViewPos;
 
 uniform vec3 objColor;
 uniform float ka;
@@ -26,8 +25,8 @@ void main()
     vec3 diffuse = kd * diff * lightIntensity * lightColor;
 
     // Specular
-    vec3 viewDir = normalize(ViewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
+    vec3 viewDir = normalize(-FragPos); // In flat shading, the view direction is constant for all fragments
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), ns);
     vec3 specular = ks * spec * lightIntensity * lightColor;
 
