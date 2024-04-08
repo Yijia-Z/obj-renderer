@@ -5,6 +5,7 @@ in vec3 FragPos;
 in vec3 Normal;
 in vec3 LightPos;
 in vec3 ViewPos;
+in vec3 vertexColor;
 
 uniform vec3 objColor;
 uniform float ka;
@@ -33,4 +34,8 @@ void main()
 
     vec3 result = (ambient + diffuse + specular) * objColor;
     FragColor = vec4(result, 1.0);
+
+    // Uncomment for zbuffer depth shading
+    // if (vertexColor != vec3(0))
+        // FragColor = vec4(vertexColor, 1.0);
 }

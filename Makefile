@@ -29,6 +29,11 @@ $(EXECUTABLE): $(OBJECTS)
 clean:
 	rm -f $(OBJECTS) $(EXECUTABLE)
 
+# Debug
+debug:
+	gdb $(EXECUTABLE)
+	./$(EXECUTABLE)
+
 # Run the executable
 run: $(EXECUTABLE)
 	./$(EXECUTABLE)
