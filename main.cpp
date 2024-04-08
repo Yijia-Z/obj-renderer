@@ -17,7 +17,6 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window, glm::mat4 &projection);
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void loadOBJ(const std::string &filename, std::vector<glm::vec3> &vertices, std::vector<glm::vec3> &colors, std::vector<unsigned int> &indices);
-vector<float> loadObj(string filename, vector<Material> &materials);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 800;
 
@@ -43,6 +42,9 @@ struct Material
         ns = e;
     }
 };
+
+vector<float> loadObj(string filename, vector<Material> &materials);
+
 struct Light
 {
     glm::vec3 position, color;
@@ -221,7 +223,7 @@ int main()
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)(vertices.size() * sizeof(glm::vec3)));
     }*/
 
-    // normal attribute
+    // attribute
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (char *)(3 * sizeof(float)));
 

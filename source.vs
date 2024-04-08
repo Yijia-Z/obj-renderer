@@ -2,7 +2,7 @@
 
 // vec4 aPos for CPU, vec3 aPos for GPU
 layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aColor;
+layout (location = 1) in vec3 aNormal;
 
 out vec3 FragPos;
 out vec3 Normal;
@@ -24,11 +24,11 @@ void main()
     gl_Position = projection * view * model * vec4(aPos, 1.0);
 
     // Uncomment for CPU-side
-    gl_Position = aPos
+    // gl_Position = aPos;
 
     //Uncomment for zbuffer
-    vec3 zBuff = vec3(1) * ((gl_Position.z - 5.0) / gl_Position.w);
-    vertexColor = zBuff;
+    // vec3 zBuff = vec3(1) * ((gl_Position.z - 5.0) / gl_Position.w);
+    // vertexColor = zBuff;
     // Uncomment for non-zbuffer
     // vertexColor = vec3(0);
 }
